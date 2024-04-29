@@ -6,18 +6,10 @@ import matplotlib.pyplot as plt
 load_dotenv()
 
 data_file_path = os.getenv('SENSOR_DATA_FILE_PATH')
-optimal_moisture_low = os.getenv('OPTIMAL_MOISTURE_LOW')
-optimal_moisture_high = os.getenv('OPTIMAL_MOISTURE_HIGH')
-optimal_light_low = os.getenv('OPTIMAL_LIGHT_LOW')
-optimal_light_high = os.getenv('OPTIMAL_LIGHT_HIGH')
-
-try:
-    optimal_moisture_low = float(optimal_moisture_low)
-    optimal_moisture_high = float(optimal_moisture_high)
-    optimal_light_low = float(optimal_light_low)
-    optimal_light_high = float(optimal_light_high)
-except ValueError:
-    raise ValueError("One or more environmental configuration values are not valid numbers.")
+optimal_moisture_low = float(os.getenv('OPTIMAL_MOISTURE_LOW'))
+optimal_moisture_high = float(os.getenv('OPTIMAL_MOISTURE_HIGH'))
+optimal_light_low = float(os.getenv('OPTIMAL_LIGHT_LOW'))
+optimal_light_high = float(os.getenv('OPTIMAL_LIGHT_HIGH'))
 
 if not os.path.exists(data_file_path):
     raise FileNotFoundError(f"The data file {data_file_path} does not exist.")
@@ -60,12 +52,10 @@ except Exception as e:
 
 def check_environmental_suitability(row):
     warnings = []
-    if row['moisture'] < optimal_moisture_low or row['moisture'] > optimal_moisture_high:
+    if not optimal_moisture_low <= row['moisture'] <= optimal_moisture_high:
         warnings.append("Suboptimal moisture level")
-
-    if row['light'] < optimal_light_low or row['light'] > optimal_light_high:
+    if not optimal_light_low <= row['light'] <= optimal_light_high:
         warnings.append("Suboptimal light condition")
-
     return warnings
 
 try:
