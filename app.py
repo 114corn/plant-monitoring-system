@@ -26,14 +26,17 @@ app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        user = User.query.filter_by(username=username).first()
-        if user and check_password_hash(user.password_hash, password):
-            session['username'] = user.username
-            return redirect(url_for('dashboard'))
-        flash('Invalid username or password')
+    try:
+        if request.method == 'POST':
+            username = request.form['username']
+            password = request.form['password']
+            user = User.query.filter_by(username=username).first()
+            if user and check_password_hash(user.password_hash, password):
+                session['username'] = user.username
+                return redirect(url_for('dashboard'))
+            flash('Invalid username or password')
+    except Exception as e:
+        flash('An error occurred during login: {}'.format(e))
     return render_template('login.html')
 
 @app.route('/logout')
@@ -43,14 +46,20 @@ def logout():
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        hashed_password = generate_password_hash(password, method='sha256')
-        new_user = User(username=username, password_hash=hashed_password)
-        db.session.add(new_user)
-        db.session.commit()
-        return redirect(url_for('login'))
+    try:
+        if request.method == 'POST':
+            username = request.form['username']
+            password = request.form['password']
+            if User.query.filter_by(username=username).first():
+                flash('Username already exists.')
+                return redirect(url_for('signup'))
+            hashed_password = generate_password_hash(password, method='sha256')
+            new_user = User(username=username, password_hash=hashed_password)
+            db.session.add(new_user)
+            db.session.commit()
+            return redirect(url_for('login'))
+    except Exception as e:
+        flash('An error occurred during signup: {}'.format(e))
     return render_template('signup.html')
 
 @app.route('/')
@@ -61,18 +70,27 @@ def index():
 
 @app.route('/dashboard')
 def dashboard():
-    if 'username' not in session:
-        return redirect(url_for('login'))
-    sensor_data = SensorData.query.order_by(SensorData.timestamp.desc()).all()
+    try:
+        if 'username' not in session:
+            return redirect(url_for('login'))
+        sensor_data = SensorData.query.order_by(SensorData.timestamp.desc()).all()
+    except Exception as e:
+        flash('An error occurred while fetching dashboard data: {}'.format(e))
+        sensor_data = []
     return render_template('dashboard.html', sensor_data=sensor_data)
 
 @app.route('/api/sensor_data', methods=['POST'])
 def update_sensor_data():
-    data = request.json
-    new_data = SensorData(temperature=data['temperature'], humidity=data['humidity'], moisture=data['moisture'])
-    db.session.add(new_data)
-    db.session.commit()
-    return json.dumps({'success':True}), 200, {'ContentType':'application/json'} 
+    try:
+        data = request.json
+        if not all(k in data for k in ('temperature', 'humidity', 'moisture')):
+            return json.dumps({'success':False, 'error':'Missing data'}), 400, {'ContentType':'application/json'}
+        new_data = SensorData(temperature=data['temperature'], humidity=data['humidity'], moisture=data['moisture'])
+        db.session.add(new_data)
+        db.session.commit()
+        return json.dumps({'success':True}), 200, {'ContentType':'application/json'}
+    except Exception as e:
+        return json.dumps({'success':False, 'error':'Error updating sensor data: {}'.format(e)}), 500, {'ContentType':'application/json'}
 
 if __name__ == '__main__':
     db.create_all()
