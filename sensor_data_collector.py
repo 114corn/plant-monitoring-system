@@ -31,15 +31,29 @@ def read_sensor_data():
 def read_temperature_sensor():
     return 25
 
+class DatabaseManager:
+    def __init__(self, db_file):
+        self.db_file = db_file
+        self.conn = None
+
+    def __enter__(self):
+        self.conn = sqlite3.connect(self.db_file)
+        return self.conn.cursor()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.conn:
+            self.conn.commit()
+            self.conn.close()
+
+def init_database():
+    with DatabaseManager(DATABASE) as cur:
+        cur.execute('''CREATE TABLE IF NOT EXISTS sensor_data
+                    (timestamp TEXT, soil_moisture INTEGER, temperature INTEGER, light INTEGER)''')
+
 def save_to_database(data):
-    conn = sqlite3.connect(DATABASE)
-    cur = conn.cursor()
-    cur.execute('''CREATE TABLE IF NOT EXISTS sensor_data
-                (timestamp TEXT, soil_moisture INTEGER, temperature INTEGER, light INTEGER)''')
-    cur.execute('''INSERT INTO sensor_data (timestamp, soil_moisture, temperature, light)
-                VALUES (?, ?, ?, ?)''', (datetime.now(), data[0], data[1], data[2]))
-    conn.commit()
-    conn.close()
+    with DatabaseManager(DATABASE) as cur:
+        cur.execute('''INSERT INTO sensor_data (timestamp, soil_moisture, temperature, light)
+                    VALUES (?, ?, ?, ?)''', (datetime.now(), data[0], data[1], data[2]))
 
 def save_to_csv(data):
     with open(CSV_FILE, mode='a', newline='') as file:
@@ -48,6 +62,7 @@ def save_to_csv(data):
 
 def main():
     init_sensors()
+    init_database()
     
     try:
         while True:
