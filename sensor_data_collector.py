@@ -26,7 +26,7 @@ def read_sensor_data():
         return (soil_moisture, temperature, light)
     except Exception as e:
         print(f"Error reading sensor data: {e}")
-        return None
+        return (None, None, None) # Return a tuple of Nones in case of error
 
 def read_temperature_sensor():
     return 25
@@ -37,28 +37,50 @@ class DatabaseManager:
         self.conn = None
 
     def __enter__(self):
-        self.conn = sqlite3.connect(self.db_file)
-        return self.conn.cursor()
+        try:
+            self.conn = sqlite3.connect(self.db_file)
+            return self.conn.cursor()
+        except Exception as e:
+            print(f"Error connecting to database: {e}")
+            return None
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.conn:
-            self.conn.commit()
-            self.conn.close()
+        try:
+            if self.conn:
+                self.conn.commit()
+                self.conn.close()
+        except Exception as e:
+            print(f"Error closing database connection: {e}")
 
 def init_database():
-    with DatabaseManager(DATABASE) as cur:
-        cur.execute('''CREATE TABLE IF NOT EXISTS sensor_data
-                    (timestamp TEXT, soil_moisture INTEGER, temperature INTEGER, light INTEGER)''')
+    try:
+        with DatabaseManager(DATABASE) as cur:
+            if cur is not None:
+                cur.execute('''CREATE TABLE IF NOT EXISTS sensor_data
+                            (timestamp TEXT, soil_moisture INTEGER, temperature INTEGER, light INTEGER)''')
+            else:
+                print("Failed to initialize database.")
+    except Exception as e:
+        print(f"Error initializing database: {e}")
 
 def save_to_database(data):
-    with DatabaseManager(DATABASE) as cur:
-        cur.execute('''INSERT INTO sensor_data (timestamp, soil_moisture, temperature, light)
-                    VALUES (?, ?, ?, ?)''', (datetime.now(), data[0], data[1], data[2]))
+    try:
+        with DatabaseManager(DATABASE) as cur:
+            if cur is not None:
+                cur.execute('''INSERT INTO sensor_data (timestamp, soil_moisture, temperature, light)
+                            VALUES (?, ?, ?, ?)''', (datetime.now(), data[0], data[1], data[2]))
+            else:
+                print("Failed to save data to database.")
+    except Exception as e:
+        print(f"Error saving data to database: {e}")
 
 def save_to_csv(data):
-    with open(CSV_FILE, mode='a', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow([datetime.now()] + list(data))
+    try:
+        with open(CSV_FILE, mode='a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow([datetime.now()] + list(data))
+    except Exception as e:
+        print(f"Error saving data to CSV: {e}")
 
 def main():
     init_sensors()
@@ -67,9 +89,11 @@ def main():
     try:
         while True:
             data = read_sensor_data()
-            if data:
+            if all(d is not None for d in data):
                 save_to_database(data)
                 save_to_csv(data)
+            else:
+                print("Error: Sensor data read failed. Skipping data save.")
             time.sleep(60)
     except KeyboardInterrupt:
         print("Stopping sensor data collection.")
