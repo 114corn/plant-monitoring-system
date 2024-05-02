@@ -2,6 +2,9 @@ import os
 from dotenv import load_dotenv
 import pandas as pd
 import matplotlib.pyplot as plt
+import smtplib, ssl
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 def load_environment_variables():
     """Loads required environment variables."""
@@ -11,7 +14,10 @@ def load_environment_variables():
         'optimal_moisture_low': float(os.getenv('OPTIMAL_MOISTURE_LOW')),
         'optimal_moisture_high': float(os.getenv('OPTIMAL_MOISTURE_HIGH')),
         'optimal_light_low': float(os.getenv('OPTIMAL_LIGHT_LOW')),
-        'optimal_light_high': float(os.getenv('OPTIMAL_LIGHT_HIGH'))
+        'optimal_light_high': float(os.getenv('OPTIMAL_LIGHT_HIGH')),
+        'email_sender': os.getenv('EMAIL_SENDER'),
+        'email_receiver': os.getenv('EMAIL_RECEIVER'),
+        'email_password': os.getenv('EMAIL_PASSWORD')
     }
     return variables
 
@@ -58,6 +64,37 @@ def check_environmental_suitability(row, optimal_values):
         warnings.append("Suboptimal light condition")
     return warnings
 
+def send_summary_email(body, env_vars):
+    """Sends an email with the summary report."""
+    message = MIMEMultipart("alternative")
+    message["Subject"] = "Plant Environment Monitoring System Summary"
+    message["From"] = env_vars['email_sender']
+    message["To"] = env_vars['email_receiver']
+
+    # Turn these into plain/html MIMEText objects
+    part = MIMEText(body, "plain")
+    message.attach(part)
+
+    # Create secure connection with server and send email
+    context = ssl.create_default_context()
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:  # Using Gmail's SMTP server as example
+        server.login(env_vars['email_sender'], env_vars['email_password'])
+        server.sendmail(
+            env_vars['email_sender'], env_vars['email_receiver'], message.as_string()
+        )
+
+def compile_summary(daily_averages):
+    """Compiles a summary of the daily averages and any warnings."""
+    summary_lines = []
+    for timestamp, row in daily_averages.iterrows():
+        line = f"On {timestamp.date()}, the average moisture level was {row['moisture']:0.2f} and the light level was {row['light']:0.2f}."
+        if 'warnings' in row and row['warnings']:
+            line += f" Warnings: {', '.join(row['warnings'])}"
+        else:
+            line += " Conditions within optimal ranges."
+        summary_lines.append(line)
+    return "\n".join(summary_lines)
+
 if __name__ == "__main__":
     env_vars = load_environment_variables()
     
@@ -71,8 +108,8 @@ if __name__ == "__main__":
         
         daily_averages['warnings'] = daily_averages.apply(check_environmental_suitability, args=(env_vars,), axis=1)
 
-        for timestamp, row in daily_averages.iterrows():
-            if row['warnings']:
-                print(f"On {timestamp.date()}, there were suboptimal conditions: {', '.join(row['warnings'])}")
+        summary = compile_summary(daily_averages)
+        print(summary)  # Optional: Print the summary in console as well
+        send_summary_email(summary, env_vars)
     except Exception as e:
         print(f"An error occurred: {e}")
