@@ -46,36 +46,29 @@ class DatabaseManager:
             return None
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        try:
-            if self.conn:
-                self.conn.commit()
-                self.conn.close()
-        except Exception as error:
-            print(f"Error closing database connection: {error}")
+        if self.conn:
+            self.conn.commit()
+            self.conn.close()
 
 def init_database():
     try:
         with DatabaseManager(DATABASE_FILENAME) as cur:
-            if cur is not None:
+            if cur:
                 cur.execute('''
                 CREATE TABLE IF NOT EXISTS sensor_data
                 (timestamp TEXT, soil_moisture INTEGER, temperature INTEGER, light INTEGER)
                 ''')
-            else:
-                print("Failed to initialize database.")
     except Exception as error:
         print(f"Error initializing database: {error}")
 
 def save_to_database(data):
     try:
         with DatabaseManager(DATABASE_FILENAME) as cur:
-            if cur is not None:
+            if cur:
                 cur.execute('''
                 INSERT INTO sensor_data (timestamp, soil_moisture, temperature, light)
                 VALUES (?, ?, ?, ?)
-                ''', (datetime.now(), data[0], data[1], data[2]))
-            else:
-                print("Failed to save data to database.")
+                ''', (datetime.now(), *data))
     except Exception as error:
         print(f"Error saving data to database: {error}")
 
