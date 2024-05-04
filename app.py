@@ -26,14 +26,17 @@ app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'your_fallback_sec
 
 @app.route('/user/login', methods=['GET', 'POST'])
 def login_user():
-    if request.method == 'POST':
-        username_entered = request.form['username']
-        password_entered = request.form['password']
-        user = User.query.filter_by(username=username_entered).first()
-        if user and verify_password_hash(user.password_hash, password_entered):
-            session['user_name'] = user.username
-            return redirect(url_for('dashboard_view'))
-        flash('Invalid username or password')
+    try:
+        if request.method == 'POST':
+            username_entered = request.form['username']
+            password_entered = request.form['password']
+            user = User.query.filter_by(username=username_entered).first()
+            if user and verify_password_hash(user.password_hash, password_entered):
+                session['user_name'] = user.username
+                return redirect(url_for('dashboard_view'))
+            flash('Invalid username or password')
+    except Exception as e:
+        flash(f'An unexpected error occurred during login: {e}', 'error')
     return render_template('login.html')
 
 @app.route('/user/logout')
@@ -43,34 +46,40 @@ def logout_user():
 
 @app.route('/user/signup', methods=['GET', 'POST'])
 def signup_user():
-    if request.method == 'POST':
-        new_username = request.form['username']
-        new_password = request.form['password']
-        existing_user = User.query.filter_by(username=new_username).first()
-        if existing_user:
-            flash('Username already exists.')
-            return redirect(url_for('signup_user'))
-        hashed_new_password = generate_password_hash(new_password, method='sha256')
-        user = User(username=new_username, password_hash=hashed_new_password)
-        db.session.add(user)
-        db.session.commit()
-        return redirect(url_for('login_user'))
+    try:
+        if request.method == 'POST':
+            new_username = request.form['username']
+            new_password = request.form['password']
+            existing_user = User.query.filter_by(username=new_username).first()
+            if existing_user:
+                flash('Username already exists.')
+                return redirect(url_for('signup_user'))
+            hashed_new_password = generate_password_hash(new_password, method='sha256')
+            new_user = User(username=new_username, password_hash=hashed_new_password)
+            db.session.add(new_user)
+            db.session.commit()
+            return redirect(url_for('login_user'))
+    except Exception as e:
+        flash(f'An error occurred during sign up: {e}', 'error')
     return render_template('signup.html')
 
 @app.route('/')
 def index():
-    if 'user_name' not in session:
-        return redirect(url_for('login_user'))
+    try:
+        if 'user_name' not in session:
+            return redirect(url_for('login_user'))
+    except Exception as e:
+        flash(f'An unexpected error occurred: {e}', 'error')
     return render_template('index.html')
 
 @app.route('/dashboard')
 def dashboard_view():
-    if 'user_name' not in session:
-        return redirect(url_for('login_user'))
     try:
+        if 'user_name' not in session:
+            return redirect(url_for('login_user'))
         sensor_records = PlantSensorData.query.order_by(PlantSensorData.timestamp.desc()).all()
     except Exception as e:
-        flash('An error occurred while fetching dashboard data: {}'.format(e))
+        flash(f'An error occurred while fetching dashboard data: {e}', 'error')
         sensor_records = []
     return render_template('dashboard.html', sensor_data=sensor_records)
 
@@ -89,5 +98,8 @@ def post_sensor_data():
         return json.dumps({'success': False, 'error': 'Error updating sensor data: {}'.format(e)}), 500, {'ContentType': 'application/json'}
 
 if __name__ == '__main__':
-    db.create_all()
+    try:
+        db.create_all()
+    except Exception as e:
+        print(f'Error during database initialization: {e}')
     app.run(debug=True, port=5000)
