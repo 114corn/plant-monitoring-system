@@ -4,92 +4,50 @@ import os
 import csv
 from datetime import datetime
 import RPi.GPIO as GPIO
+import Adafruit_DHT  # Import the DHT library
+
+# Environment Variables - Update as per your sensor types
+DHT_SENSOR_TYPE = Adafruit_DHT.DHT22  # Replace DHT22 with DHT11 if you are using that
+DHT_PIN = int(os.getenv(TEMPERATURE_PIN_KEY)) # Assuming TEMP_PIN is for DHT sensor
 
 SOIL_MOISTURE_PIN_KEY = 'SOIL_MOISTURE_PIN'
-TEMPERATURE_PIN_KEY = 'TEMPERATURE_PIN'
 LIGHT_SENSOR_PIN_KEY = 'LIGHT_SENSOR_PIN'
 
 DATABASE_FILENAME = 'sensor_data.db'
 CSV_FILENAME = 'sensor_data.csv'
 
-def init_sensors():
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(int(os.getenv(SOIL_MOISTURE_PIN_KEY)), GPIO.IN)
-    GPIO.setup(int(os.getenv(TEMPERATURE_PIN_KEY)), GPIO.IN)
-    GPIO.setup(int(os.getenv(LIGHT_SENSOR_PIN_KEY)), GPIO.IN)
-
-def read_sensor_data():
-    try:
-        soil_moisture = GPIO.input(int(os.getenv(SOIL_MOISTURE_PIN_KEY)))
-        temperature = read_temperature_sensor()
-        light = GPIO.input(int(os.getenv(LIGHT_SENSOR_PIN_KEY)))
-        return soil_moisture, temperature, light
-    except Exception as error:
-        print(f"Error reading sensor data: {error}")
-        return None, None, None
+# Alert thresholds
+MOISTURE_THRESHOLD = 30  # Adjust based on your plant's needs
+TEMP_THRESHOLD_LOW = 18  # Minimum temperature in Celsius
+TEMP_THRESHOLD_HIGH = 27  # Maximum temperature in Celsius
+LIGHT_THRESHOLD = 200  # Light intensity threshold (example value, adjust as needed)
 
 def read_temperature_sensor():
-    return 25
+    """Reads temperature and humidity from the DHT sensor."""
+    humidity, temperature = Adafruit_DHT.read_retry(DHT_SENSOR_TYPE, DHT_PIN)
+    if humidity is not None and temperature is not None:
+        return temperature
+    else:
+        print("Failed to retrieve data from humidity and temperature sensor")
+        return None
 
-class DatabaseManager:
-    
-    def __init__(self, db_file):
-        self.db_file = db_file
-        self.conn = None
-
-    def __enter__(self):
-        try:
-            self.conn = sqlite3.connect(self.db_file)
-            return self.conn.cursor()
-        except Exception as error:
-            print(f"Error connecting to database: {error}")
-            return None
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.conn:
-            self.conn.commit()
-            self.conn.close()
-
-def init_database():
-    try:
-        with DatabaseManager(DATABASE_FILENAME) as cur:
-            if cur:
-                cur.execute('''
-                CREATE TABLE IF NOT EXISTS sensor_data
-                (timestamp TEXT, soil_moisture INTEGER, temperature INTEGER, light INTEGER)
-                ''')
-    except Exception as error:
-        print(f"Error initializing database: {error}")
-
-def save_to_database(data):
-    try:
-        with DatabaseManager(DATABASE_FILENAME) as cur:
-            if cur:
-                cur.execute('''
-                INSERT INTO sensor_data (timestamp, soil_moisture, temperature, light)
-                VALUES (?, ?, ?, ?)
-                ''', (datetime.now(), *data))
-    except Exception as error:
-        print(f"Error saving data to database: {error}")
-
-def save_to_csv(data):
-    try:
-        with open(CSV_FILENAME, mode='a', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow([datetime.now()] + list(data))
-    except Exception as error:
-        print(f"Error saving data to CSV: {error}")
+def check_alerts(soil_moisture, temperature, light):
+    """Check if the readings are outside of thresholds and print alerts."""
+    if soil_moisture < MOISTURE_THRESHOLD:
+        print("Alert: Soil moisture is below threshold!")
+    if temperature < TEMP_THRESHOLD_LOW or temperature > TEMP_THRESHOLD_HIGH:
+        print("Alert: Temperature is outside of the comfortable range!")
+    if light < LIGHT_THRESHOLD:
+        print("Alert: Light intensity is below threshold!")
 
 def main():
-    init_sensors()
-    init_database()
-
     try:
         while True:
             data = read_sensor_data()
             if all(d is not None for d in data):
                 save_to_database(data)
                 save_to_csv(data)
+                check_alerts(*data)  # Unpack data directly into the alert checking function
             else:
                 print("Error: Sensor data read failed. Skipping data save.")
             time.sleep(60)
