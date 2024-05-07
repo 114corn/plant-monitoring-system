@@ -1,14 +1,20 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.exc import SQLAlchemyError  # Import for better DB exception handling
 from datetime import datetime
 from werkzeug.security import generate_password_hash, verify_password_hash
 import os
 import json
+import logging  # Import logging
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///plant_monitoring_system.db'
 db = SQLAlchemy(app)
+
+# Configure basic logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -35,8 +41,12 @@ def login_user():
                 session['user_name'] = user.username
                 return redirect(url_for('dashboard_view'))
             flash('Invalid username or password')
+    except SQLAlchemyError as e:
+        logger.error(f'SQLAlchemy error during login: {e}')
+        flash('Database error during login.', 'error')
     except Exception as e:
-        flash(f'An unexpected error occurred during login: {e}', 'error')
+        logger.error(f'Unexpected error during login: {e}')
+        flash('An unexpected error occurred during login.', 'error')
     return render_template('login.html')
 
 @app.route('/user/logout')
@@ -59,17 +69,18 @@ def signup_user():
             db.session.add(new_user)
             db.session.commit()
             return redirect(url_for('login_user'))
+    except SQLAlchemyError as e:
+        logger.error(f'SQLAlchemy error during signup: {e}')
+        flash('Database error during sign up.', 'error')
     except Exception as e:
-        flash(f'An error occurred during sign up: {e}', 'error')
+        logger.error(f'Unexpected error during sign up: {e}')
+        flash('An error occurred during sign up.', 'error')
     return render_template('signup.html')
 
 @app.route('/')
 def index():
-    try:
-        if 'user_name' not in session:
-            return redirect(url_for('login_user'))
-    except Exception as e:
-        flash(f'An unexpected error occurred: {e}', 'error')
+    if 'user_name' not in session:
+        return redirect(url_for('login_user'))
     return render_template('index.html')
 
 @app.route('/dashboard')
@@ -78,8 +89,13 @@ def dashboard_view():
         if 'user_name' not in session:
             return redirect(url_for('login_user'))
         sensor_records = PlantSensorData.query.order_by(PlantSensorData.timestamp.desc()).all()
+    except SQLAlchemyError as e:
+        logger.error(f'Error fetching dashboard data from the database: {e}')
+        flash('Database error.', 'error')
+        sensor_records = []
     except Exception as e:
-        flash(f'An error occurred while fetching dashboard data: {e}', 'error')
+        logger.error(f'Unexpected error while fetching dashboard data: {e}')
+        flash('An error occurred while fetching dashboard data.', 'error')
         sensor_records = []
     return render_template('dashboard.html', sensor_data=sensor_records)
 
@@ -94,12 +110,16 @@ def post_sensor_data():
         db.session.add(new_sensor_data)
         db.session.commit()
         return json.dumps({'success': True}), 200, {'ContentType': 'application/json'}
+    except SQLAlchemyError as e:
+        logger.error(f'Database error updating sensor data: {e}')
+        return json.dumps({'success': False, 'error': 'Database error updating sensor data'}), 500, {'ContentType': 'application/json'}
     except Exception as e:
-        return json.dumps({'success': False, 'error': 'Error updating sensor data: {}'.format(e)}), 500, {'ContentType': 'application/json'}
+        logger.error(f'Error updating sensor data: {e}')
+        return json.dumps({'success': False, 'error': f'Error updating sensor data: {e}'}), 500, {'ContentType': 'application/json'}
 
 if __name__ == '__main__':
     try:
         db.create_all()
     except Exception as e:
-        print(f'Error during database initialization: {e}')
+        logger.error(f'Error during database initialization: {e}')
     app.run(debug=True, port=5000)
