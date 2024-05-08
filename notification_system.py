@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 class NotificationManager:
     def __init__(self):
         self.load_environment_variables()
@@ -39,7 +40,7 @@ class NotificationManager:
             with smtplib.SMTP(self.email_host, self.email_port) as server:
                 self.connect_and_send(server, msg, recipient)
         except smtplib.SMTPException as e:
-            print('Failed to send email: ', e)
+            print('Failed to send email:', e)
 
     def connect_and_send(self, server, msg, recipient):
         server.starttls()
@@ -51,26 +52,29 @@ class NotificationManager:
             client = Client(self.twilio_account_sid, self.twilio_auth_token)
             self.create_sms(client, body)
         except TwilioRestException as e:
-            print('Failed to send SMS: ', e)
+            print('Failed to send SMS:', e)
 
     def create_sms(self, client, body):
         client.messages.create(body=body, from_=self.twilio_phone_number, to=self.recipient_phone_number)
+
 
 def analyze_data_and_alert(notification_manager):
     try:
         analysis_result = data_analyzer.analyze()
     except Exception as e:
-        print('Failed to analyze data: ', e)
+        print('Failed to analyze data:', e)
         return
 
     send_alerts_based_on_analysis(notification_manager, analysis_result)
 
+
 def send_alerts_based_on_analysis(notification_manager, analysis_result):
     if analysis_result.get('watering_needed', False):
         send_watering_alerts(notification_manager)
-        
+
     if analysis_result.get('temperature_warning', False):
         send_temperature_alerts(notification_manager)
+
 
 def send_watering_alerts(notification_manager):
     message = 'Your plant needs watering today.'
@@ -79,12 +83,14 @@ def send_watering_alerts(notification_manager):
     if notification_manager.recipient_email:
         notification_manager.send_email('Watering Reminder', message, notification_manager.recipient_email)
 
+
 def send_temperature_alerts(notification_manager):
     message = 'The temperature is at a critical level!'
     sms_message = 'Warning: Critical temperature level detected!'
     notification_manager.send_sms(sms_message)
     if notification_manager.recipient_email:
         notification_manager.send_email('Temperature Warning', message, notification_manager.recipient_email)
+
 
 if __name__ == "__main__":
     notification_manager = NotificationManager()
