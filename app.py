@@ -1,19 +1,18 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.exc import SQLAlchemyError  # Import for better DB exception handling
+from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
-from werkzeug.security import generate_password_hash, verify_password_hash
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import json
-import logging  # Import logging
+import logging
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///plant_monitoring_system.db'
 db = SQLAlchemy(app)
 
-# Configure basic logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 class User(db.Model):
@@ -21,9 +20,9 @@ class User(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(120), nullable=False)
 
-class PlantSensorData(db.Model):
+class SensorData(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    recorded_at = db.Column(db.DateTime, default=datetime.utcnow)
     temperature = db.Column(db.Float, nullable=False)
     humidity = db.Column(db.Float, nullable=False)
     soil_moisture = db.Column(db.Float, nullable=False)
@@ -31,15 +30,15 @@ class PlantSensorData(db.Model):
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'your_fallback_secret_key')
 
 @app.route('/user/login', methods=['GET', 'POST'])
-def login_user():
+def login():
     try:
         if request.method == 'POST':
-            username_entered = request.form['username']
-            password_entered = request.form['password']
-            user = User.query.filter_by(username=username_entered).first()
-            if user and verify_password_hash(user.password_hash, password_entered):
-                session['user_name'] = user.username
-                return redirect(url_for('dashboard_view'))
+            username = request.form['username']
+            password = request.form['password']
+            user = User.query.filter_by(username=username).first()
+            if user and check_password_hash(user.password_hash, password):
+                session['user'] = user.username
+                return redirect(url_for('dashboard'))
             flash('Invalid username or password')
     except SQLAlchemyError as e:
         logger.error(f'SQLAlchemy error during login: {e}')
@@ -50,25 +49,25 @@ def login_user():
     return render_template('login.html')
 
 @app.route('/user/logout')
-def logout_user():
-    session.pop('user_name', None)
-    return redirect(url_for('login_user'))
+def logout():
+    session.pop('user', None)
+    return redirect(url_for('login'))
 
 @app.route('/user/signup', methods=['GET', 'POST'])
-def signup_user():
+def signup():
     try:
         if request.method == 'POST':
-            new_username = request.form['username']
-            new_password = request.form['password']
-            existing_user = User.query.filter_by(username=new_username).first()
+            username = request.form['username']
+            password = request.form['password']
+            existing_user = User.query.filter_by(username=username).first()
             if existing_user:
                 flash('Username already exists.')
-                return redirect(url_for('signup_user'))
-            hashed_new_password = generate_password_hash(new_password, method='sha256')
-            new_user = User(username=new_username, password_hash=hashed_new_password)
-            db.session.add(new_user)
+                return redirect(url_for('signup'))
+            hashed_password = generate_password_hash(password, method='sha256')
+            user = User(username=username, password_hash=hashed_password)
+            db.session.add(user)
             db.session.commit()
-            return redirect(url_for('login_user'))
+            return redirect(url_for('login'))
     except SQLAlchemyError as e:
         logger.error(f'SQLAlchemy error during signup: {e}')
         flash('Database error during sign up.', 'error')
@@ -78,36 +77,36 @@ def signup_user():
     return render_template('signup.html')
 
 @app.route('/')
-def index():
-    if 'user_name' not in session:
-        return redirect(url_for('login_user'))
+def home():
+    if 'user' not in session:
+        return redirect(url_for('login'))
     return render_template('index.html')
 
 @app.route('/dashboard')
-def dashboard_view():
+def dashboard():
     try:
-        if 'user_name' not in session:
-            return redirect(url_for('login_user'))
-        sensor_records = PlantSensorData.query.order_by(PlantSensorData.timestamp.desc()).all()
+        if 'user' not in session:
+            return redirect(url_for('login'))
+        sensor_data_entries = SensorData.query.order_by(SensorData.recorded_at.desc()).all()
     except SQLAlchemyError as e:
         logger.error(f'Error fetching dashboard data from the database: {e}')
         flash('Database error.', 'error')
-        sensor_records = []
+        sensor_data_entries = []
     except Exception as e:
         logger.error(f'Unexpected error while fetching dashboard data: {e}')
         flash('An error occurred while fetching dashboard data.', 'error')
-        sensor_records = []
-    return render_template('dashboard.html', sensor_data=sensor_records)
+        sensor_data_entries = []
+    return render_template('dashboard.html', sensor_data=sensor_data_entries)
 
 @app.route('/api/sensor_data', methods=['POST'])
-def post_sensor_data():
+def receive_sensor_data():
     try:
-        received_data = request.json
+        data = request.json
         required_keys = ['temperature', 'humidity', 'soil_moisture']
-        if not all(key in received_data for key in required_keys):
+        if not all(k in data for k in required_keys):
             return json.dumps({'success': False, 'error': 'Missing data'}), 400, {'ContentType': 'application/json'}
-        new_sensor_data = PlantSensorData(temperature=received_data['temperature'], humidity=received_data['humidity'], soil_moisture=received_data['soil_moisture'])
-        db.session.add(new_sensor_data)
+        sensor_data = SensorData(temperature=data['temperature'], humidity=data['humidity'], soil_moisture=data['soil_moisture'])
+        db.session.add(sensor_data)
         db.session.commit()
         return json.dumps({'success': True}), 200, {'ContentType': 'application/json'}
     except SQLAlchemyError as e:
