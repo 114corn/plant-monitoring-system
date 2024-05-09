@@ -6,9 +6,11 @@ import data_analyzer
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
 from dotenv import load_dotenv
+import logging
 
 load_dotenv()
 
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class NotificationManager:
     def __init__(self):
@@ -39,8 +41,9 @@ class NotificationManager:
 
             with smtplib.SMTP(self.email_host, self.email_port) as server:
                 self.connect_and_send(server, msg, recipient)
+            logging.info(f"Email sent to {recipient} with subject: {subject}")
         except smtplib.SMTPException as e:
-            print('Failed to send email:', e)
+            logging.error('Failed to send email: %s', e)
 
     def connect_and_send(self, server, msg, recipient):
         server.starttls()
@@ -51,30 +54,32 @@ class NotificationManager:
         try:
             client = Client(self.twilio_account_sid, self.twilio_auth_token)
             self.create_sms(client, body)
+            logging.info(f"SMS sent to {self.recipient_phone_number}")
         except TwilioRestException as e:
-            print('Failed to send SMS:', e)
+            logging.error('Failed to send SMS: %s', e)
 
     def create_sms(self, client, body):
-        client.messages.create(body=body, from_=self.twilio_phone_number, to=self.recipient_phone_number)
-
+        message = client.messages.create(body=body, from_=self.twilio_phone_number, to=self.recipient_phone_number)
+        logging.debug(f"Twilio message SID: {message.sid}")
 
 def analyze_data_and_alert(notification_manager):
     try:
         analysis_result = data_analyzer.analyze()
+        logging.debug("Data analysis result: %s", analysis_result)
     except Exception as e:
-        print('Failed to analyze data:', e)
+        logging.error('Failed to analyze data: %s', e)
         return
 
     send_alerts_based_on_analysis(notification_manager, analysis_result)
 
-
 def send_alerts_based_on_analysis(notification_manager, analysis_result):
     if analysis_result.get('watering_needed', False):
+        logging.info("Sending watering needed alerts")
         send_watering_alerts(notification_manager)
 
     if analysis_result.get('temperature_warning', False):
+        logging.info("Sending temperature warning alerts")
         send_temperature_alerts(notification_manager)
-
 
 def send_watering_alerts(notification_manager):
     message = 'Your plant needs watering today.'
@@ -83,7 +88,6 @@ def send_watering_alerts(notification_manager):
     if notification_manager.recipient_email:
         notification_manager.send_email('Watering Reminder', message, notification_manager.recipient_email)
 
-
 def send_temperature_alerts(notification_manager):
     message = 'The temperature is at a critical level!'
     sms_message = 'Warning: Critical temperature level detected!'
@@ -91,7 +95,7 @@ def send_temperature_alerts(notification_manager):
     if notification_manager.recipient_email:
         notification_manager.send_email('Temperature Warning', message, notification_manager.recipient_email)
 
-
 if __name__ == "__main__":
+    logging.info("Starting notification manager")
     notification_manager = NotificationManager()
     analyze_data_and_alert(notification_manager)
