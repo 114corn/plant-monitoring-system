@@ -1,1 +1,35 @@
-This repository contains a Python script specifically tailored for interfacing with environmental sensors—namely, soil moisture, temperature, and light sensors—via GPIO pins on a Raspberry Pi or a compatible microcontroller. The script is meticulously programmed to periodically collect data from these sensors, ensuring that valuable environmental parameters are captured at regular intervals. This data is then systematically organized and saved, offering the user a choice between a CSV file format for easy data manipulation and analysis or a local SQLite database for robust data management. The script includes dedicated functions for initializing the sensors, thereby simplifying the setup process. It also features intelligent error-handling mechanisms designed to effectively deal with common issues such as sensor disconnections or data corruption, ensuring the reliability and integrity of the data collection process. This project is an essential tool for anyone looking to monitor environmental conditions closely, whether for agricultural, educational, or hobbyist purposes.
+# Plant Monitoring System
+
+## Overview
+
+This repository contains a Python script designed for interfacing with soil moisture, temperature, and light sensors via GPIO pins on a Raspberry Pi or compatible microcontroller. The script periodically collects and organizes sensor data, offering storage options in CSV format or a local SQLite database.
+
+## Features
+
+- **Sensor Integration**: Supports soil moisture, temperature, and light sensors.
+- **Data Collection**: Periodically collects environmental data.
+- **Data Storage**: Saves data in CSV format or SQLite database.
+- **Easy Setup**: Includes functions for initializing sensors.
+- **Error Handling**: Manages common issues like sensor disconnections and data corruption.
+
+## Getting Started
+
+1. **Clone the repository**:
+   ```sh
+   git clone https://github.com/114corn/plant-monitoring-system.git
+   cd plant-monitoring-system
+   ```
+
+2. **Install dependencies**:
+   ```sh
+   pip install -r requirements.txt
+   ```
+
+3. **Run the script**:
+   ```sh
+   python monitor.py
+   ```
+
+## Applications
+
+Ideal for monitoring environmental conditions in agricultural, educational, or hobbyist projects.
